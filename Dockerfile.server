@@ -1,0 +1,20 @@
+# ── vLLM OpenAI server ────────────────────────────────────────────────────────
+# docker build -f Dockerfile.server -t depression_vllm_server .
+FROM vllm/vllm-openai:gemma4
+
+# ── Host paths mounted into container ─────────────────────────────────────────
+# /model  ← model weights
+# No script needed — vllm serve is the entrypoint
+
+ENV MODEL_PATH=/model \
+    GPU_MEMORY_UTILIZATION=0.90 \
+    MAX_MODEL_LEN=8192 \
+    PORT=8000
+
+ENTRYPOINT ["sh", "-c", \
+  "vllm serve ${MODEL_PATH} \
+   --dtype bfloat16 \
+   --gpu-memory-utilization ${GPU_MEMORY_UTILIZATION} \
+   --max-model-len ${MAX_MODEL_LEN} \
+   --port ${PORT} \
+   --served-model-name google/gemma-4-31B-it"]

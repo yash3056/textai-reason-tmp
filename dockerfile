@@ -3,7 +3,7 @@
 # docker pull vllm/vllm-openai:latest
 #  docker build -t depression_vllm .
 # docker run --gpus all -it --entrypoint /bin/bash depression_vllm 
-FROM vllm/vllm-openai:latest
+FROM vllm/vllm-openai:gemma4
 
 # ── System deps ───────────────────────────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -24,8 +24,7 @@ COPY classify_vllm.py /app/classify_vllm.py
 #   output: /data/output.csv
 ENV MODEL_PATH=/model \
     INPUT_CSV=/data/test.csv \
-    OUTPUT_CSV=/data/output.csv \
-    TENSOR_PARALLEL_SIZE=2
+    OUTPUT_CSV=/data/output.csv
 
 # ── Run with Docker ───────────────────────────────────────────────────────────
 # docker run --gpus all \
