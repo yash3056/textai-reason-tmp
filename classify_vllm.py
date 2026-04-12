@@ -19,17 +19,13 @@ from vllm import LLM, SamplingParams
 
 # ── Config ────────────────────────────────────────────────────────────────────
 MODEL_PATH      = "/model"
-INPUT_CSV       = "/data/test.csv"
+INPUT_CSV       = "/data/Suicide_Detection.csv"
 OUTPUT_CSV      = "/data/output.csv"
 BATCH_SIZE      = 256                # smaller = more frequent saves
 MAX_TOKENS      = 16384
 
 def get_tensor_parallel_size() -> int:
     """Auto-detect available GPUs, fall back to env var, then 1."""
-    # Env var always wins — lets you override at runtime
-    if "TENSOR_PARALLEL_SIZE" in os.environ:
-        return int(os.environ["TENSOR_PARALLEL_SIZE"])
-    # Auto-detect
     if torch.cuda.is_available():
         n = torch.cuda.device_count()
         print(f"Auto-detected {n} GPU(s), setting tensor_parallel_size={n}")
