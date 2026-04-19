@@ -1,0 +1,130 @@
+# Depression Classification Inference (HPC / Singularity Guide)
+
+This guide provides detailed instructions on how to run the `depression_classify` model on a High-Performance Computing (HPC) cluster. Because most HPC environments do not support Docker for security reasons, the container has been converted to a **Singularity/Apptainer (`.sif`)** image and is submitted using a **PBS** job script.
+
+## 📋 Prerequisites
+
+Before running the job, ensure the following directories and files exist on the cluster:
+* **The Model:** `gemma-5b-model` must be located at `/home/aza/workspace/textai-reason/gemma-5b-model`.
+* **The Data:** Your input CSV (`test.csv` or similar) must be available at `/home/aza/workspace/textai-reason`.
+* **The Singularity Image:** `depression_classify.sif` must be compiled and available in your working directory.
+
+---
+
+## 🛠️ Step 1: Prepare the PBS Submission Script
+
+HPC clusters use a queuing system. Instead of running the container directly, you must wrap the execution in a submission script. 
+
+Create a file named `submit_job.sh` in your workspace:
+
+```bash
+#!/bin/bash
+# ── PBS Resource Requests ─────────────────────────────────────────────────────
+#PBS -N depression_classify      # The name of the job in the queue
+#PBS -l nodes=1:ppn=8:gpus=1     # Request 1 node, 8 CPU cores, and 1 GPU
+#PBS -l mem=32gb                 # Request 32 GB of system memory
+#PBS -l walltime=02:00:00        # Max execution time (2 hours). Adjust as needed
+#PBS -j oe                       # Merge standard output and error into one log file
+
+# ── Environment Setup ─────────────────────────────────────────────────────────
+# Move to the directory from which you submitted the job (required for relative paths)
+cd $PBS_O_WORKDIR
+
+# Define absolute paths for data and models
+MODEL_DIR="/home/aza/workspace/textai-reason/gemma-5b-model"
+DATA_DIR="/home/aza/workspace/textai-reason"
+SIF_IMAGE="depression_classify.sif"
+
+# (Optional) Override Docker ENV defaults by using the SINGULARITYENV_ prefix
+export SINGULARITYENV_INPUT_CSV="/data/test.csv"
+export SINGULARITYENV_OUTPUT_JSON="/data/output.json"
+export SINGULARITYENV_BATCH_SIZE="8"
+
+# ── Execution ─────────────────────────────────────────────────────────────────
+# Run the Singularity container
+echo "Starting inference job..."
+singularity run --nv \
+    -B ${MODEL_DIR}:/model \
+    -B ${DATA_DIR}:/data \
+    ${SIF_IMAGE}
+
+echo "Job finished successfully."
+```
+
+### Detailed Breakdown of the Singularity Command:
+* `singularity run`: Executes the default `ENTRYPOINT` defined in your original Dockerfile (`python3 /app/final.py`).
+* `--nv`: Passes the host's NVIDIA GPU drivers into the container. (The Singularity equivalent of Docker's `--gpus all`).
+* `-B ${MODEL_DIR}:/model`: Binds (mounts) your host model directory to `/model` inside the container.
+* `-B ${DATA_DIR}:/data`: Binds your host data directory to `/data` inside the container. This allows the script to read the CSV and write the JSON back to your host filesystem.
+
+---
+
+## 🚀 Step 2: Submit the Job to the Queue
+
+Once your `submit_job.sh` is ready, push it to the cluster's queue using the `qsub` command:
+
+```bash
+qsub submit_job.sh
+```
+*After running this, the terminal will return a **Job ID** (e.g., `12345.cluster`). Save this number if you need to track or cancel the job.*
+
+---
+
+## 📊 Step 3: Monitor Job Status
+
+You can monitor the status of your job using the `qstat` command.
+
+* **Check all your active jobs:**
+  ```bash
+  qstat -u aza
+  ```
+* **Watch live updates (refreshes every 2 seconds):**
+  ```bash
+  watch qstat -u aza
+  ```
+* **Get detailed information about a specific job (useful for debugging why a job is queued):**
+  ```bash
+  qstat -f <JOB_ID>
+  ```
+
+**Understanding `qstat` Status Codes:**
+* **`Q` (Queued):** Waiting for cluster resources (GPUs/CPUs) to become available.
+* **`R` (Running):** The script is actively executing.
+* **`C` (Completed):** The job has finished (or crashed).
+* **`E` (Exiting):** The job is wrapping up and saving logs.
+
+---
+
+## 🛑 Step 4: Canceling a Job (If Needed)
+
+If you made a mistake or need to kill a running job, use the `qdel` command followed by the Job ID:
+
+```bash
+qdel <JOB_ID>
+```
+
+---
+
+## ⚙️ Step 5: Customizing Variables at Runtime
+
+In Docker, you used the `-e` flag to pass environment variables (e.g., `-e BATCH_SIZE=16`). Singularity does not use `-e`. Instead, you must export environment variables with the `SINGULARITYENV_` prefix **before** the `singularity run` command in your `submit_job.sh`.
+
+Singularity will automatically strip the prefix and pass the variables into the container.
+
+**Example: Running a different CSV file**
+Modify your `submit_job.sh` to include:
+```bash
+export SINGULARITYENV_INPUT_CSV="/data/my_other_file.csv"
+export SINGULARITYENV_OUTPUT_JSON="/data/my_other_output.json"
+export SINGULARITYENV_BATCH_SIZE="16"
+
+singularity run --nv -B ...
+```
+
+---
+
+## 🔍 Troubleshooting
+
+* **Permission Denied / Cannot Write JSON:** The container runs as your host user, not as root. Ensure that `/home/aza/workspace/textai-reason/` has write permissions so the container can create `output.json`.
+* **CUDA Out of Memory:** The Gemma-5b model requires substantial VRAM. If your cluster's GPU does not have enough memory, either lower the `SINGULARITYENV_BATCH_SIZE` to `1` or `2`, or request a larger GPU node via your `#PBS` directives.
+* **Missing Files (`FileNotFoundError`):** Double-check your `-B` bind mounts. If `/home/aza/workspace/textai-reason` is mounted to `/data`, the script *must* look for `/data/test.csv`, not `/home/aza/...`.

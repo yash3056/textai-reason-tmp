@@ -7,7 +7,7 @@
 
 #   -e INPUT_CSV=/data/my_other_file.csv \
 #   -e OUTPUT_JSON=/data/my_other_output.json \
-
+# docker pull ghcr.io/yash3056/depression_classify:latest
 FROM pytorch/pytorch:2.11.0-cuda13.0-cudnn9-runtime
 # ── System deps ───────────────────────────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
