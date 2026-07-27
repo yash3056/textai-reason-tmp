@@ -76,12 +76,25 @@ def merge(shard_dir: Path, output_path: str, fmt: str) -> None:
     extra = [c for c in df.columns if c not in cols]
     df = df[cols + extra]
 
-    if fmt == "json":
-        df.to_json(output_path, orient="records", indent=2, force_ascii=False)
-    else:
-        df.to_csv(output_path, index=False, encoding="utf-8")
+    # ── Split valid vs. invalid-label rows ────────────────────────────────────
+    valid_mask = df["label"].isin(VALID_LABELS)
+    good_df = df[valid_mask]
+    bad_df  = df[~valid_mask]
 
-    print(f"Saved {total:,} rows → {output_path}  ({fmt.upper()})")
+    def _save(frame: pd.DataFrame, path: str) -> None:
+        if fmt == "json":
+            frame.to_json(path, orient="records", indent=2, force_ascii=False)
+        else:
+            frame.to_csv(path, index=False, encoding="utf-8")
+
+    _save(good_df, output_path)
+    print(f"Saved {len(good_df):,} rows → {output_path}  ({fmt.upper()})")
+
+    if not bad_df.empty:
+        out_dir = Path(output_path).parent
+        error_path = out_dir / f"error.{fmt}"
+        _save(bad_df, str(error_path))
+        print(f"Saved {len(bad_df):,} invalid-label rows → {error_path}  ({fmt.upper()})")
 
 
 def main():
