@@ -1,8 +1,10 @@
 """
-merge_shards.py — Merge all shard_*.jsonl files from test_llama/ into output.csv
+merge_shards.py — Merge all shard_*.jsonl files from test_llama/ into output.csv or output.json
 Usage:
-    python merge_shards.py                  # uses hardcoded paths below
-    python merge_shards.py --out my.csv     # custom output path
+    python merge_shards.py                  # uses hardcoded paths below, writes CSV
+    python merge_shards.py --json            # write JSON instead of CSV
+    python merge_shards.py --csv --out my.csv
+    python merge_shards.py --json --out my.json
     python merge_shards.py --shards /other/dir --out /other/output.csv
 """
 
@@ -14,12 +16,12 @@ import pandas as pd
 from tqdm import tqdm
 
 # ── Hardcoded paths (match llama-cpp.py) ──────────────────────────────────────
-SHARD_DIR  = Path("/home/aza/workspace/textai-reason/test_llama")
-OUTPUT_CSV = "/home/aza/workspace/textai-reason/test_llama/output.csv"
+SHARD_DIR   = Path("/home/aza/workspace/textai-reason/test_llama")
+OUTPUT_BASE = "/home/aza/workspace/textai-reason/test_llama/output"
 VALID_LABELS = {"depression", "non-depression"}
 
 
-def merge(shard_dir: Path, output_csv: str) -> None:
+def merge(shard_dir: Path, output_path: str, fmt: str) -> None:
     shards = sorted(shard_dir.glob("shard_*.jsonl"))
 
     if not shards:
@@ -74,19 +76,31 @@ def merge(shard_dir: Path, output_csv: str) -> None:
     extra = [c for c in df.columns if c not in cols]
     df = df[cols + extra]
 
-    df.to_csv(output_csv, index=False, encoding="utf-8")
-    print(f"Saved {total:,} rows → {output_csv}")
+    if fmt == "json":
+        df.to_json(output_path, orient="records", indent=2, force_ascii=False)
+    else:
+        df.to_csv(output_path, index=False, encoding="utf-8")
+
+    print(f"Saved {total:,} rows → {output_path}  ({fmt.upper()})")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Merge JSONL shards into a single CSV")
+    parser = argparse.ArgumentParser(description="Merge JSONL shards into a single CSV or JSON file")
     parser.add_argument("--shards", default=str(SHARD_DIR),
                         help=f"Directory containing shard_*.jsonl files (default: {SHARD_DIR})")
-    parser.add_argument("--out", default=OUTPUT_CSV,
-                        help=f"Output CSV path (default: {OUTPUT_CSV})")
+    parser.add_argument("--out", default=None,
+                        help="Output file path (default: output.csv or output.json depending on format)")
+
+    fmt_group = parser.add_mutually_exclusive_group()
+    fmt_group.add_argument("--csv", action="store_true", help="Write output as CSV (default)")
+    fmt_group.add_argument("--json", action="store_true", help="Write output as JSON")
+
     args = parser.parse_args()
 
-    merge(Path(args.shards), args.out)
+    fmt = "json" if args.json else "csv"  # csv is the default when neither flag is given
+    out_path = args.out or f"{OUTPUT_BASE}.{fmt}"
+
+    merge(Path(args.shards), out_path, fmt)
 
 
 if __name__ == "__main__":
