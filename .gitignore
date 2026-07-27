@@ -5,3 +5,4 @@ Suicide_Detection.csv
 *.sif
 *.zip
 .gitignore
+test_llama/*.jsonl
